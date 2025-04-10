@@ -1,331 +1,192 @@
-/******************************************************
- * PART 0: Global stubs & utilities
- ******************************************************/
+namespace finchDijkstra {
 
-// Replace these with your Finch Robot APIs
-async function moveCell(): Promise<void> {
-    // Stub: Move 1 cell forward
-    console.log("moveCell() called");
-}
+    // ----------------------------------------------
+    // Global Variables
+    // ----------------------------------------------
+    let grid: number[][] = []
+    let path: string[] = [] // we'll store a path as ["row,col", "row,col", ...]
 
-async function turnRight(): Promise<void> {
-    // Stub: Turn robot 90° right
-    console.log("turnRight() called");
-}
+    // Stubs: replace with real Finch calls
+    function moveForward(): void {
+        console.log("Moving forward 1 cell")
+    }
+    function turnLeft(): void {
+        console.log("Turning left 90 degrees")
+    }
+    function turnRight(): void {
+        console.log("Turning right 90 degrees")
+    }
 
-async function turnLeft(): Promise<void> {
-    // Stub: Turn robot 90° left
-    console.log("turnLeft() called");
-}
+    // ----------------------------------------------
+    // BLOCK 1: Initialize the Grid
+    // ----------------------------------------------
+    //% blockId="FD_initGrid" block="Initialize the grid"
+    export function initGrid(): void {
+        // Example grid with 7 rows and 9 columns
+        // 0 = open, 9 = barrier
+        grid = [
+            [0, 0, 0, 9, 0, 0, 0, 0, 0],
+            [0, 9, 0, 9, 0, 9, 0, 0, 0],
+            [0, 9, 0, 9, 0, 9, 0, 0, 0],
+            [0, 9, 0, 9, 0, 9, 0, 0, 0],
+            [0, 9, 0, 0, 0, 9, 0, 0, 0],
+            [0, 9, 9, 9, 9, 9, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ]
+        path = [] // reset
+        console.log("Grid initialized")
+    }
 
-/** 
- * Stub for distance sensor reading. 
- * Return -1 if no obstacle or a number representing distance in mm. 
- */
-function getDistance(): number {
-    // Stub: Return fake distance sensor reading
-    return -1; // -1 → no obstacle detected
-}
+    // ----------------------------------------------
+    // Helper Functions for BFS
+    // ----------------------------------------------
+    function posToString(r: number, c: number): string {
+        return r + "," + c
+    }
+    function stringToPos(pos: string): [number, number] {
+        let parts = pos.split(",")
+        let rr = parseInt(parts[0])
+        let cc = parseInt(parts[1])
+        return [rr, cc]
+    }
 
-/** Helper to convert row/col to string keys for object maps */
-function nodeKey(r: number, c: number): string {
-    return `${r},${c}`;
-}
+    // 4 directions: up, down, left, right
+    let directions = [
+        [-1, 0],
+        [1, 0],
+        [0, -1],
+        [0, 1]
+    ]
 
-/** Helper to parse string keys back into [row, col] arrays */
-function parseKey(k: string): [number, number] {
-    const parts = k.split(",");
-    return [parseInt(parts[0]), parseInt(parts[1])];
-}
+    // ----------------------------------------------
+    // BLOCK 2: Compute BFS Path
+    // ----------------------------------------------
+    //% blockId="FD_computePath" block="Compute path from row $startR col $startC to row $endR col $endC"
+    export function computePath(startR: number, startC: number, endR: number, endC: number): void {
+        let rows = grid.length
+        if (rows === 0) {
+            console.log("Grid is empty, call initGrid first")
+            return
+        }
+        let cols = grid[0].length
 
-/******************************************************
- * PART 1: Abstract real-world data into a graph
- ******************************************************/
+        // visited array
+        let visited: boolean[][] = []
+        for (let i = 0; i < rows; i++) {
+            visited.push([])
+            for (let j = 0; j < cols; j++) {
+                visited[i][j] = false
+            }
+        }
 
-type Graph = {
-    [key: string]: Array<[string, number]>;
-};
+        // cameFrom to reconstruct the path
+        let cameFrom: { [key: string]: string } = {}
 
-function gridToGraph(grid: number[][]): Graph {
-    const rows = grid.length;
-    const cols = grid[0].length;
-    const graph: Graph = {};
+        // BFS queue using two pointers (no shift usage)
+        let queue: string[] = []
+        let front = 0 // index of next item
 
-    const directions: Array<[number, number]> = [
-        [-1, 0], // Up
-        [1, 0],  // Down
-        [0, -1], // Left
-        [0, 1]   // Right
-    ];
+        // Start
+        let startPos = posToString(startR, startC)
+        queue.push(startPos)
+        visited[startR][startC] = true
 
-    for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-            // Skip barriers
-            if (grid[r][c] === 9) {
-                continue;
+        let found = false
+        while (front < queue.length) {
+            let currentPosStr = queue[front]
+            front++
+            let currentRC = stringToPos(currentPosStr)
+            let cr = currentRC[0]
+            let cc2 = currentRC[1]
+
+            // Check if we've reached the end
+            if (cr === endR && cc2 === endC) {
+                found = true
+                break
             }
 
-            // Current node key
-            const currentKey = nodeKey(r, c);
-            graph[currentKey] = [];
-
-            // Check neighbors
-            for (const [dr, dc] of directions) {
-                const nr = r + dr;
-                const nc = c + dc;
-                if (
-                    nr >= 0 && nr < rows &&
-                    nc >= 0 && nc < cols &&
-                    grid[nr][nc] !== 9
-                ) {
-                    const neighborKey = nodeKey(nr, nc);
-                    const cost = grid[nr][nc];
-                    graph[currentKey].push([neighborKey, cost]);
+            // Explore neighbors
+            for (let d = 0; d < directions.length; d++) {
+                let rr2 = cr + directions[d][0]
+                let cc22 = cc2 + directions[d][1]
+                if (rr2 >= 0 && rr2 < rows && cc22 >= 0 && cc22 < cols) {
+                    if (grid[rr2][cc22] !== 9 && !visited[rr2][cc22]) {
+                        visited[rr2][cc22] = true
+                        let neighborStr = posToString(rr2, cc22)
+                        cameFrom[neighborStr] = currentPosStr
+                        queue.push(neighborStr)
+                    }
                 }
             }
         }
-    }
 
-    return graph;
-}
-
-/******************************************************
- * PART 2: Dijkstra's Algorithm
- ******************************************************/
-
-type DijkstraResult = {
-    path: Array<[number, number]>;
-    cost: number;
-};
-
-function dijkstra(
-    graph: Graph,
-    start: [number, number],
-    end: [number, number]
-): DijkstraResult {
-    // Convert start/end nodes to keys
-    const startKey = nodeKey(start[0], start[1]);
-    const endKey = nodeKey(end[0], end[1]);
-
-    // Priority queue (cost, nodeKey)
-    const pq: Array<[number, string]> = [];
-    pq.push([0, startKey]);
-
-    // Distances map: nodeKey -> cost
-    const distances: { [key: string]: number } = {};
-    for (const node in graph) {
-        distances[node] = Infinity;
-    }
-    distances[startKey] = 0;
-
-    // Path reconstruction map: nodeKey -> came_from(nodeKey)
-    const cameFrom: { [key: string]: string } = {};
-
-    while (pq.length > 0) {
-        // Pop the smallest-cost item
-        pq.sort((a, b) => a[0] - b[0]);
-        const [currentCost, currentNodeKey] = pq.shift()!;
-
-        // If reached target, stop
-        if (currentNodeKey === endKey) {
-            break;
-        }
-
-        // For each neighbor
-        for (const [neighborKey, weight] of graph[currentNodeKey]) {
-            const newCost = currentCost + weight;
-            if (newCost < distances[neighborKey]) {
-                distances[neighborKey] = newCost;
-                cameFrom[neighborKey] = currentNodeKey;
-                pq.push([newCost, neighborKey]);
+        // Reconstruct path if found
+        path = []
+        if (found) {
+            let endPos = posToString(endR, endC)
+            let node = endPos
+            // Instead of "while (node in cameFrom)", do a simpler check:
+            while (cameFrom[node]) {
+                path.push(node)
+                node = cameFrom[node]
             }
-        }
-    }
-
-    // Reconstruct path
-    const path: Array<[number, number]> = [];
-    let node = endKey;
-    while (cameFrom[node] !== undefined) {
-        path.push(parseKey(node));
-        node = cameFrom[node];
-    }
-    path.push(parseKey(startKey));
-    path.reverse();
-
-    return {
-        path: path,
-        cost: distances[endKey]
-    };
-}
-
-/******************************************************
- * PART 3: Robot Movement
- ******************************************************/
-
-/**
- * Moves the Finch one cell forward (no color logic).
- */
-async function moveOneCell(): Promise<void> {
-    // Stub call (1 cell forward)
-    await moveCell();
-}
-
-/**
- * Moves the Finch along a path of grid cells.
- * Returns an index if blocked and needs recalculation, 
- * or undefined if completed.
- */
-async function moveRobot(path: Array<[number, number]>): Promise<number | undefined> {
-    if (path.length < 2) {
-        console.log("Path is too short to move.");
-        return;
-    }
-
-    // Current heading (rowDelta, colDelta), e.g. (0,1) = facing right
-    let currentDirection: [number, number] = [0, 1];
-
-    for (let i = 0; i < path.length - 1; i++) {
-        const currentPos = path[i];
-        const nextPos = path[i + 1];
-        const moveDirection: [number, number] = [
-            nextPos[0] - currentPos[0],
-            nextPos[1] - currentPos[1]
-        ];
-
-        // Check if we need to turn
-        if (
-            moveDirection[0] !== currentDirection[0] ||
-            moveDirection[1] !== currentDirection[1]
-        ) {
-            // Determine turn logic
-            const facingRightToDown =
-                currentDirection[0] === 0 && currentDirection[1] === 1 &&
-                moveDirection[0] === 1 && moveDirection[1] === 0;
-            const facingDownToLeft =
-                currentDirection[0] === 1 && currentDirection[1] === 0 &&
-                moveDirection[0] === 0 && moveDirection[1] === -1;
-            const facingLeftToUp =
-                currentDirection[0] === 0 && currentDirection[1] === -1 &&
-                moveDirection[0] === -1 && moveDirection[1] === 0;
-            const facingUpToRight =
-                currentDirection[0] === -1 && currentDirection[1] === 0 &&
-                moveDirection[0] === 0 && moveDirection[1] === 1;
-
-            const facingRightToUp =
-                currentDirection[0] === 0 && currentDirection[1] === 1 &&
-                moveDirection[0] === -1 && moveDirection[1] === 0;
-            const facingUpToLeft =
-                currentDirection[0] === -1 && currentDirection[1] === 0 &&
-                moveDirection[0] === 0 && moveDirection[1] === -1;
-            const facingLeftToDown =
-                currentDirection[0] === 0 && currentDirection[1] === -1 &&
-                moveDirection[0] === 1 && moveDirection[1] === 0;
-            const facingDownToRight =
-                currentDirection[0] === 1 && currentDirection[1] === 0 &&
-                moveDirection[0] === 0 && moveDirection[1] === 1;
-
-            const isOppositeDirection =
-                moveDirection[0] === -currentDirection[0] &&
-                moveDirection[1] === -currentDirection[1];
-
-            // Turn right
-            if (
-                facingRightToDown || facingDownToLeft ||
-                facingLeftToUp || facingUpToRight
-            ) {
-                await turnRight();
+            // Add start
+            path.push(startPos)
+            // Reverse
+            let reversed: string[] = []
+            for (let k = path.length - 1; k >= 0; k--) {
+                reversed.push(path[k])
             }
-            // Turn left
-            else if (
-                facingRightToUp || facingUpToLeft ||
-                facingLeftToDown || facingDownToRight
-            ) {
-                await turnLeft();
-            }
-            // 180° turn
-            else if (isOppositeDirection) {
-                await turnRight();
-                await turnRight();
-            }
-
-            currentDirection = moveDirection; // update heading
-        }
-
-        // Check for obstacle
-        const distanceReading = getDistance();
-        if (distanceReading >= 200 || distanceReading === -1) {
-            // Move if clear
-            await moveOneCell();
+            path = reversed
+            console.log("Path found with BFS. Steps: " + path.length)
         } else {
-            // Obstruction
-            console.log("Obstruction detected, recalculating...");
-            // Realign to face right (0,1) if needed (simplified logic)
-            if (!(currentDirection[0] === 0 && currentDirection[1] === 1)) {
-                // Example: just reorient to right
-                if (currentDirection[0] === -1 && currentDirection[1] === 0) {
-                    await turnRight();
-                } else if (currentDirection[0] === 1 && currentDirection[1] === 0) {
-                    await turnLeft();
-                } else {
-                    await turnRight();
-                    await turnRight();
-                }
-            }
-            return i; // Return index where it stopped
+            console.log("No path found with BFS.")
         }
     }
 
-    console.log("Path completed!");
-    return undefined;
-}
+    // ----------------------------------------------
+    // BLOCK 3: Move Robot Along the Path
+    // ----------------------------------------------
+    //% blockId="FD_moveRobot" block="Move robot along path"
+    export function moveRobot(): void {
+        if (path.length < 2) {
+            console.log("Path is too short or not computed.")
+            return
+        }
 
-/******************************************************
- * PART 4: Main
- ******************************************************/
+        // Start facing "down" for example
+        //  (rowDelta, colDelta)
+        let currentDir: [number, number] = [1, 0]
 
-async function main() {
-    // PART 1: Build the grid & graph
-    const grid: number[][] = [
-        [0, 1, 1, 9, 1, 1, 1, 3, 1],
-        [1, 9, 1, 9, 1, 9, 1, 3, 1],
-        [5, 9, 1, 9, 1, 9, 1, 3, 1],
-        [6, 9, 1, 9, 1, 9, 1, 3, 1],
-        [2, 9, 1, 1, 1, 9, 1, 3, 3],
-        [2, 9, 9, 9, 9, 9, 1, 1, 1],
-        [3, 5, 2, 6, 1, 4, 3, 2, 1]
-    ];
-    const graph = gridToGraph(grid);
+        for (let l = 0; l < path.length - 1; l++) {
+            let thisPos = stringToPos(path[l])
+            let nextPos = stringToPos(path[l + 1])
 
-    // PART 2: Solve for the shortest path
-    const start: [number, number] = [0, 0];
-    const end: [number, number] = [6, 8];
-    let { path: shortestPath, cost } = dijkstra(graph, start, end);
-    console.log("Initial shortest path:" + shortestPath + "cost:"+ cost);
+            let moveDir: [number, number] = [
+                nextPos[0] - thisPos[0],
+                nextPos[1] - thisPos[1]
+            ]
 
-    // PART 3: Implement the motion along that path
-    let result = await moveRobot(shortestPath);
+            // If moveDir != currentDir, we turn
+            if (moveDir[0] !== currentDir[0] || moveDir[1] !== currentDir[1]) {
+                // naive approach to guess left vs right turn
+                if (
+                    (currentDir[0] === 1 && moveDir[1] === 1) ||
+                    (currentDir[1] === 1 && moveDir[0] === -1) ||
+                    (currentDir[0] === -1 && moveDir[1] === -1) ||
+                    (currentDir[1] === -1 && moveDir[0] === 1)
+                ) {
+                    turnRight()
+                } else {
+                    turnLeft()
+                }
+                currentDir = moveDir
+            }
 
-    // If obstacle encountered, recalc from partial path
-    while (result !== undefined) {
-        // Block that cell on the grid
-        const blockedRow = shortestPath[result + 1][0];
-        const blockedCol = shortestPath[result + 1][1];
-        grid[blockedRow][blockedCol] = 9; // Barrier
+            // move forward
+            moveForward()
+        }
 
-        // Re-run Dijkstra from that point
-        const newStart: [number, number] = shortestPath[result];
-        const updatedGraph = gridToGraph(grid);
-        const dRes = dijkstra(updatedGraph, newStart, end);
-        shortestPath = dRes.path;
-        cost = dRes.cost;
-        console.log("Recalculated shortest path:" + shortestPath+ "cost:" + cost);
-
-        // Attempt the new path
-        result = await moveRobot(shortestPath);
+        console.log("Path movement complete.")
     }
-
-    console.log("All done!");
 }
-
-// Run
-main();
