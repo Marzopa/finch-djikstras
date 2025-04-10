@@ -8,12 +8,15 @@ namespace finchDijkstra {
 
     // Stubs: replace with real Finch calls
     function moveForward(): void {
+        finch.setMove(MoveDir.Forward, 15, 100)
         console.log("Moving forward 1 cell")
     }
     function turnLeft(): void {
+        finch.setTurn(RLDir.Left, 90, 100)
         console.log("Turning left 90 degrees")
     }
     function turnRight(): void {
+        finch.setTurn(RLDir.Right, 90, 100)
         console.log("Turning right 90 degrees")
     }
 
